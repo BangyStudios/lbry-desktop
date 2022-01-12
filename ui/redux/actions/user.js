@@ -1,5 +1,5 @@
 import Lbry from 'lbry';
-import { makeSelectClaimForUri } from 'redux/selectors/claims';
+import { selectClaimForUri } from 'redux/selectors/claims';
 import { doFetchChannelListMine } from 'redux/actions/claims';
 import { isURIValid, normalizeURI } from 'util/lbryURI';
 import { batchActions } from 'util/batch-actions';
@@ -7,15 +7,12 @@ import { batchActions } from 'util/batch-actions';
 import * as ACTIONS from 'constants/action_types';
 import { doClaimRewardType, doRewardList } from 'redux/actions/rewards';
 import { selectEmailToVerify, selectPhoneToVerify, selectUserCountryCode, selectUser } from 'redux/selectors/user';
-import { doToast } from 'redux/actions/notifications';
 import rewards from 'rewards';
 import { Lbryio } from 'lbryinc';
 import { DOMAIN } from 'config';
 import { getDefaultLanguage } from 'util/default-languages';
 const AUTH_IN_PROGRESS = 'authInProgress';
 export let sessionStorageAvailable = false;
-const CHECK_INTERVAL = 200;
-const AUTH_WAIT_TIMEOUT = 10000;
 
 export function doFetchInviteStatus(shouldCallRewardList = true) {
   return (dispatch) => {
@@ -97,37 +94,6 @@ export function doInstallNewWithParams(
   };
 }
 
-function checkAuthBusy() {
-  let time = Date.now();
-  return new Promise(function (resolve, reject) {
-    (function waitForAuth() {
-      try {
-        sessionStorage.setItem('test', 'available');
-        sessionStorage.removeItem('test');
-        sessionStorageAvailable = true;
-      } catch (e) {
-        if (e) {
-          // no session storage
-        }
-      }
-      if (!IS_WEB || !sessionStorageAvailable) {
-        return resolve();
-      }
-      const inProgress = window.sessionStorage.getItem(AUTH_IN_PROGRESS);
-      if (!inProgress) {
-        window.sessionStorage.setItem(AUTH_IN_PROGRESS, 'true');
-        return resolve();
-      } else {
-        if (Date.now() - time < AUTH_WAIT_TIMEOUT) {
-          setTimeout(waitForAuth, CHECK_INTERVAL);
-        } else {
-          return resolve();
-        }
-      }
-    })();
-  });
-}
-
 // TODO: Call doInstallNew separately so we don't have to pass appVersion and os_system params?
 export function doAuthenticate(
   appVersion,
@@ -142,10 +108,7 @@ export function doAuthenticate(
     dispatch({
       type: ACTIONS.AUTHENTICATION_STARTED,
     });
-    checkAuthBusy()
-      .then(() => {
-        return Lbryio.authenticate(DOMAIN, getDefaultLanguage());
-      })
+    return Lbryio.authenticate(DOMAIN, getDefaultLanguage())
       .then((user) => {
         if (sessionStorageAvailable) window.sessionStorage.removeItem(AUTH_IN_PROGRESS);
         Lbryio.getAuthToken().then((token) => {
@@ -156,7 +119,6 @@ export function doAuthenticate(
 
           if (shareUsageData) {
             dispatch(doRewardList());
-            dispatch(doFetchInviteStatus(false));
             if (callInstall) {
               doInstallNew(appVersion, os, firebaseToken, callbackForUsersWhoAreSharingData, domain);
             }
@@ -642,37 +604,6 @@ export function doUserIdentityVerify(stripeToken) {
   };
 }
 
-export function doUserInviteNew(email) {
-  return (dispatch) => {
-    dispatch({
-      type: ACTIONS.USER_INVITE_NEW_STARTED,
-    });
-
-    return Lbryio.call('user', 'invite', { email }, 'post')
-      .then((success) => {
-        dispatch({
-          type: ACTIONS.USER_INVITE_NEW_SUCCESS,
-          data: { email },
-        });
-
-        dispatch(
-          doToast({
-            message: __('Invite sent to %email_address%', { email_address: email }),
-          })
-        );
-
-        dispatch(doFetchInviteStatus());
-        return success;
-      })
-      .catch((error) => {
-        dispatch({
-          type: ACTIONS.USER_INVITE_NEW_FAILURE,
-          data: { error },
-        });
-      });
-  };
-}
-
 export function doUserSetReferrerReset() {
   return (dispatch) => {
     dispatch({
@@ -690,7 +621,7 @@ export function doUserSetReferrer(referrer, shouldClaim) {
     const isValid = isURIValid(referrer);
     if (isValid) {
       const uri = normalizeURI(referrer);
-      claim = makeSelectClaimForUri(uri)(getState());
+      claim = selectClaimForUri(getState(), uri);
       if (!claim) {
         try {
           const response = await Lbry.resolve({ urls: [uri] });

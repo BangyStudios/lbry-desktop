@@ -1,7 +1,7 @@
 // @flow
 
 import * as ACTIONS from 'constants/action_types';
-import { remote } from 'electron';
+import * as remote from '@electron/remote';
 
 // @if TARGET='app'
 const win = remote.BrowserWindow.getFocusedWindow();
@@ -317,7 +317,7 @@ reducers[ACTIONS.SET_INCOGNITO] = (state, action) => {
   };
 };
 
-reducers[ACTIONS.USER_STATE_POPULATE] = (state, action) => {
+reducers[ACTIONS.SYNC_STATE_POPULATE] = (state, action) => {
   const { welcomeVersion, allowAnalytics } = action.data;
   return {
     ...state,

@@ -22,6 +22,8 @@ type Props = {
   collectionId: string,
   showInfo: boolean,
   setShowInfo: (boolean) => void,
+  showEdit: boolean,
+  setShowEdit: (boolean) => void,
   collectionHasEdits: boolean,
   isBuiltin: boolean,
   doToggleShuffleList: (string, boolean) => void,
@@ -44,12 +46,28 @@ function CollectionActions(props: Props) {
     doToggleShuffleList,
     playNextUri,
     firstItem,
+    showEdit,
+    setShowEdit,
   } = props;
   const [doShuffle, setDoShuffle] = React.useState(false);
   const { push } = useHistory();
   const isMobile = useIsMobile();
   const claimId = claim && claim.claim_id;
   const webShareable = true; // collections have cost?
+
+  /*
+    A bit too much dependency with both ordering and shuffling depending on a single list item index selector
+    For now when they click edit, we'll toggle shuffle off for them.
+  */
+  const handleSetShowEdit = (setting) => {
+    doToggleShuffleList(collectionId, false);
+    setShowEdit(setting);
+  };
+
+  const handlePublishMode = () => {
+    doToggleShuffleList(collectionId, false);
+    push(`?${PAGE_VIEW_QUERY}=${EDIT_PAGE}`);
+  };
 
   const doPlay = React.useCallback(
     (playUri) => {
@@ -120,7 +138,7 @@ function CollectionActions(props: Props) {
               title={uri ? __('Update') : __('Publish')}
               label={uri ? __('Update') : __('Publish')}
               className={classnames('button--file-action')}
-              onClick={() => push(`?${PAGE_VIEW_QUERY}=${EDIT_PAGE}`)}
+              onClick={() => handlePublishMode()}
               icon={ICONS.PUBLISH}
               iconColor={collectionHasEdits && 'red'}
               iconSize={18}
@@ -158,6 +176,17 @@ function CollectionActions(props: Props) {
     />
   );
 
+  const showEditButton = (
+    <Button
+      title={__('Edit')}
+      className={classnames('button-toggle', {
+        'button-toggle--active': showEdit,
+      })}
+      icon={ICONS.EDIT}
+      onClick={() => handleSetShowEdit(!showEdit)}
+    />
+  );
+
   if (isMobile) {
     return (
       <div className="media__actions">
@@ -173,7 +202,10 @@ function CollectionActions(props: Props) {
           {lhsSection}
           {rhsSection}
         </div>
-        {uri && <>{infoButton}</>}
+        <div className="section">
+          {uri && infoButton}
+          {showEditButton}
+        </div>
       </div>
     );
   }

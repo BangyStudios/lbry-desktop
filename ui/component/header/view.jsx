@@ -17,10 +17,8 @@ import NotificationHeaderButton from 'component/notificationHeaderButton';
 import ChannelThumbnail from 'component/channelThumbnail';
 import SkipNavigationButton from 'component/skipNavigationButton';
 import Logo from 'component/logo';
-// @if TARGET='app'
-import { remote } from 'electron';
+import * as remote from '@electron/remote';
 import { IS_MAC } from 'component/app/view';
-// @endif
 
 type Props = {
   user: ?User,
@@ -63,6 +61,7 @@ type Props = {
   isAbsoluteSideNavHidden: boolean,
   hideCancel: boolean,
   activeChannelClaim: ?ChannelClaim,
+  myChannels: ?Array<ChannelClaim>,
 };
 
 const Header = (props: Props) => {
@@ -91,6 +90,7 @@ const Header = (props: Props) => {
     hideCancel,
     user,
     activeChannelClaim,
+    myChannels,
   } = props;
   const isMobile = useIsMobile();
   // on the verify page don't let anyone escape other than by closing the tab to keep session data consistent
@@ -102,6 +102,7 @@ const Header = (props: Props) => {
   const { backLabel, backNavDefault, title: backTitle, simpleTitle: simpleBackTitle } = backout || {};
   const notificationsEnabled = ENABLE_UI_NOTIFICATIONS || (user && user.experimental_ui);
   const activeChannelUrl = activeChannelClaim && activeChannelClaim.permanent_url;
+  const hasChannels = myChannels && myChannels.length > 0;
 
   // Sign out if they click the "x" when they are on the password prompt
   const authHeaderAction = syncError ? { onClick: signOut } : { navigate: '/' };
@@ -162,19 +163,6 @@ const Header = (props: Props) => {
     }
   }
 
-  const loginButtons = (
-    <div className="header__auth-buttons">
-      <Button
-        navigate={`/$/${PAGES.AUTH_SIGNIN}`}
-        button="link"
-        label={__('Log In')}
-        className="mobile-hidden"
-        disabled={user === null}
-      />
-      <Button navigate={`/$/${PAGES.AUTH}`} button="primary" label={__('Sign Up')} disabled={user === null} />
-    </div>
-  );
-
   type BalanceButtonProps = { className: string };
   const BalanceButton = (balanceButtonProps: BalanceButtonProps) => (
     <Button
@@ -219,11 +207,7 @@ const Header = (props: Props) => {
               icon={ICONS.ARROW_LEFT}
             />
             {backTitle && <h1 className="header__auth-title">{isMobile ? simpleBackTitle || backTitle : backTitle}</h1>}
-            {authenticated || !IS_WEB ? (
-              <BalanceButton className="header__navigation-item menu__title" />
-            ) : (
-              loginButtons
-            )}
+            <BalanceButton className="header__navigation-item menu__title" />
           </div>
         ) : (
           <>
@@ -250,6 +234,7 @@ const Header = (props: Props) => {
                 aria-label={__('Home')}
                 className="header__navigation-item header__navigation-item--lbry"
                 onClick={() => {
+                  // here use state.router.location.pathname
                   if (history.location.pathname === '/') window.location.reload();
                 }}
                 // @if TARGET='app'
@@ -286,75 +271,61 @@ const Header = (props: Props) => {
             </div>
 
             {!authHeader && !backout ? (
-              <div className={classnames('header__menu', { 'header__menu--with-balance': !IS_WEB || authenticated })}>
-                {(!IS_WEB || authenticated) && (
-                  <BalanceButton className="header__navigation-item menu__title mobile-hidden" />
-                )}
-
-                {IS_WEB && !authenticated && loginButtons}
-
-                {(authenticated || !IS_WEB) && (
-                  <Menu>
-                    <MenuButton
-                      aria-label={__('Your account')}
-                      title={__('Your account')}
-                      className={classnames('header__navigation-item', {
-                        'menu__title header__navigation-item--icon': !activeChannelUrl,
-                        'header__navigation-item--profile-pic': activeChannelUrl,
-                      })}
-                      // @if TARGET='app'
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                      // @endif
-                    >
-                      {activeChannelUrl ? (
-                        <ChannelThumbnail uri={activeChannelUrl} small noLazyLoad />
-                      ) : (
-                        <Icon size={18} icon={ICONS.ACCOUNT} aria-hidden />
-                      )}
-                    </MenuButton>
-                    <MenuList className="menu__list--header">
-                      <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.UPLOADS}`)}>
-                        <Icon aria-hidden icon={ICONS.PUBLISH} />
-                        {__('Uploads')}
-                      </MenuItem>
-                      <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.CHANNELS}`)}>
-                        <Icon aria-hidden icon={ICONS.CHANNEL} />
-                        {__('Channels')}
-                      </MenuItem>
+              <div className={classnames('header__menu', 'header__menu--with-balance')}>
+                <BalanceButton className="header__navigation-item menu__title mobile-hidden" />
+                <Menu>
+                  <MenuButton
+                    aria-label={__('Your account')}
+                    title={__('Your account')}
+                    className={classnames('header__navigation-item', {
+                      'menu__title header__navigation-item--icon': !activeChannelUrl,
+                      'header__navigation-item--profile-pic': activeChannelUrl,
+                    })}
+                    // @if TARGET='app'
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    // @endif
+                  >
+                    {activeChannelUrl ? (
+                      <ChannelThumbnail uri={activeChannelUrl} small noLazyLoad />
+                    ) : (
+                      <Icon size={18} icon={ICONS.ACCOUNT} aria-hidden />
+                    )}
+                  </MenuButton>
+                  <MenuList className="menu__list--header">
+                    <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.UPLOADS}`)}>
+                      <Icon aria-hidden icon={ICONS.PUBLISH} />
+                      {__('Uploads')}
+                    </MenuItem>
+                    <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.CHANNELS}`)}>
+                      <Icon aria-hidden icon={ICONS.CHANNEL} />
+                      {__('Channels')}
+                    </MenuItem>
+                    {hasChannels && authenticated && (
                       <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.CREATOR_DASHBOARD}`)}>
                         <Icon aria-hidden icon={ICONS.ANALYTICS} />
                         {__('Creator Analytics')}
                       </MenuItem>
-                      <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.REWARDS}`)}>
-                        <Icon aria-hidden icon={ICONS.REWARDS} />
-                        {__('Rewards')}
+                    )}
+                    {authenticated ? (
+                      <MenuItem onSelect={openSignOutModal}>
+                        <div className="menu__link">
+                          <Icon aria-hidden icon={ICONS.SIGN_OUT} />
+                          {__('Sign Out')}
+                        </div>
+                        <span className="menu__link-help">{email}</span>
                       </MenuItem>
-                      <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.INVITE}`)}>
-                        <Icon aria-hidden icon={ICONS.INVITE} />
-                        {__('Invites')}
-                      </MenuItem>
-
-                      {authenticated ? (
-                        <MenuItem onSelect={IS_WEB ? signOut : openSignOutModal}>
-                          <div className="menu__link">
-                            <Icon aria-hidden icon={ICONS.SIGN_OUT} />
-                            {__('Sign Out')}
-                          </div>
-                          <span className="menu__link-help">{email}</span>
+                    ) : (
+                      <>
+                        <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.AUTH_SIGNIN}`)}>
+                          <Icon aria-hidden icon={ICONS.SIGN_IN} />
+                          {__('Cloud Connect')}
                         </MenuItem>
-                      ) : !IS_WEB ? (
-                        <>
-                          <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.AUTH_SIGNIN}`)}>
-                            <Icon aria-hidden icon={ICONS.SIGN_IN} />
-                            {__('Cloud Connect')}
-                          </MenuItem>
-                        </>
-                      ) : null}
-                    </MenuList>
-                  </Menu>
-                )}
+                      </>
+                    )}
+                  </MenuList>
+                </Menu>
               </div>
             ) : (
               !isVerifyPage &&
@@ -395,37 +366,35 @@ type HeaderMenuButtonProps = {
 };
 
 function HeaderMenuButtons(props: HeaderMenuButtonProps) {
-  const { authenticated, notificationsEnabled, history, handleThemeToggle, currentTheme } = props;
+  const { notificationsEnabled, history, handleThemeToggle, currentTheme } = props;
 
   return (
     <div className="header__buttons">
-      {(authenticated || !IS_WEB) && (
-        <Menu>
-          <MenuButton
-            aria-label={__('Publish a file, or create a channel')}
-            title={__('Publish a file, or create a channel')}
-            className="header__navigation-item menu__title header__navigation-item--icon mobile-hidden"
-            // @if TARGET='app'
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-            }}
-            // @endif
-          >
-            <Icon size={18} icon={ICONS.PUBLISH} aria-hidden />
-          </MenuButton>
+      <Menu>
+        <MenuButton
+          aria-label={__('Publish a file, or create a channel')}
+          title={__('Publish a file, or create a channel')}
+          className="header__navigation-item menu__title header__navigation-item--icon mobile-hidden"
+          // @if TARGET='app'
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+          }}
+          // @endif
+        >
+          <Icon size={18} icon={ICONS.PUBLISH} aria-hidden />
+        </MenuButton>
 
-          <MenuList className="menu__list--header">
-            <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.UPLOAD}`)}>
-              <Icon aria-hidden icon={ICONS.PUBLISH} />
-              {__('Upload')}
-            </MenuItem>
-            <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.CHANNEL_NEW}`)}>
-              <Icon aria-hidden icon={ICONS.CHANNEL} />
-              {__('New Channel')}
-            </MenuItem>
-          </MenuList>
-        </Menu>
-      )}
+        <MenuList className="menu__list--header">
+          <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.UPLOAD}`)}>
+            <Icon aria-hidden icon={ICONS.PUBLISH} />
+            {__('Upload')}
+          </MenuItem>
+          <MenuItem className="menu__link" onSelect={() => history.push(`/$/${PAGES.CHANNEL_NEW}`)}>
+            <Icon aria-hidden icon={ICONS.CHANNEL} />
+            {__('New Channel')}
+          </MenuItem>
+        </MenuList>
+      </Menu>
 
       {notificationsEnabled && <NotificationHeaderButton />}
 

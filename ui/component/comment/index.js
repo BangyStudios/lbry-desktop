@@ -1,6 +1,6 @@
 import { connect } from 'react-redux';
 import {
-  makeSelectStakedLevelForChannelUri,
+  selectTotalStakedAmountForChannelUri,
   makeSelectClaimForUri,
   makeSelectThumbnailForUri,
   selectMyChannelClaims,
@@ -9,10 +9,9 @@ import { doCommentUpdate, doCommentList } from 'redux/actions/comments';
 import { makeSelectChannelIsMuted } from 'redux/selectors/blocked';
 import { doToast } from 'redux/actions/notifications';
 import { doSetPlayingUri } from 'redux/actions/content';
-import { selectUserVerifiedEmail } from 'redux/selectors/user';
 import {
   selectLinkedCommentAncestors,
-  makeSelectOthersReactionsForComment,
+  selectOthersReactsForComment,
   makeSelectTotalReplyPagesForParentId,
 } from 'redux/selectors/comments';
 import { selectActiveChannelClaim } from 'redux/selectors/app';
@@ -28,12 +27,12 @@ const select = (state, props) => {
     claim: makeSelectClaimForUri(props.uri)(state),
     thumbnail: props.authorUri && makeSelectThumbnailForUri(props.authorUri)(state),
     channelIsBlocked: props.authorUri && makeSelectChannelIsMuted(props.authorUri)(state),
-    commentingEnabled: IS_WEB ? Boolean(selectUserVerifiedEmail(state)) : true,
-    othersReacts: makeSelectOthersReactionsForComment(reactionKey)(state),
+    commentingEnabled: true,
+    othersReacts: selectOthersReactsForComment(state, reactionKey),
     activeChannelClaim,
     myChannels: selectMyChannelClaims(state),
     playingUri: selectPlayingUri(state),
-    stakedLevel: makeSelectStakedLevelForChannelUri(props.authorUri)(state),
+    stakedLevel: selectTotalStakedAmountForChannelUri(state, props.authorUri),
     linkedCommentAncestors: selectLinkedCommentAncestors(state),
     totalReplyPages: makeSelectTotalReplyPagesForParentId(props.commentId)(state),
   };

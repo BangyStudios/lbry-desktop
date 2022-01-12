@@ -1,14 +1,14 @@
 import { connect } from 'react-redux';
 import {
-  makeSelectClaimForUri,
+  selectClaimForUri,
   makeSelectIsUriResolving,
-  makeSelectClaimIsMine,
+  selectClaimIsMine,
   makeSelectClaimIsPending,
   makeSelectClaimIsNsfw,
   makeSelectReflectingClaimForUri,
   makeSelectClaimWasPurchased,
   makeSelectTitleForUri,
-  makeSelectDateForUri,
+  selectDateForUri,
 } from 'redux/selectors/claims';
 import { makeSelectStreamingUrlForUri } from 'redux/selectors/file_info';
 import {
@@ -20,39 +20,32 @@ import {
 import { doResolveUri } from 'redux/actions/claims';
 import { doCollectionEdit } from 'redux/actions/collections';
 import { doFileGet } from 'redux/actions/file';
-import { selectMutedChannels, makeSelectChannelIsMuted } from 'redux/selectors/blocked';
-import { selectBlackListedOutpoints, selectFilteredOutpoints } from 'lbryinc';
+import { selectBanStateForUri } from 'lbryinc';
 import { selectShowMatureContent } from 'redux/selectors/settings';
 import { makeSelectHasVisitedUri } from 'redux/selectors/content';
 import { makeSelectIsSubscribed } from 'redux/selectors/subscriptions';
-import { selectModerationBlockList } from 'redux/selectors/comments';
 import ClaimPreview from './view';
 import formatMediaDuration from 'util/formatMediaDuration';
 
 const select = (state, props) => {
-  const claim = props.uri && makeSelectClaimForUri(props.uri)(state);
+  const claim = props.uri && selectClaimForUri(state, props.uri);
   const media = claim && claim.value && (claim.value.video || claim.value.audio);
   const mediaDuration = media && media.duration && formatMediaDuration(media.duration, { screenReader: true });
 
   return {
     claim,
     mediaDuration,
-    date: props.uri && makeSelectDateForUri(props.uri)(state),
+    date: props.uri && selectDateForUri(state, props.uri),
     title: props.uri && makeSelectTitleForUri(props.uri)(state),
     pending: props.uri && makeSelectClaimIsPending(props.uri)(state),
     reflectingProgress: props.uri && makeSelectReflectingClaimForUri(props.uri)(state),
     obscureNsfw: selectShowMatureContent(state) === false,
-    claimIsMine: props.uri && makeSelectClaimIsMine(props.uri)(state),
+    claimIsMine: props.uri && selectClaimIsMine(state, claim),
     isResolvingUri: props.uri && makeSelectIsUriResolving(props.uri)(state),
     isResolvingRepost: props.uri && makeSelectIsUriResolving(props.repostUrl)(state),
-    repostClaim: props.uri && makeSelectClaimForUri(props.uri)(state),
     nsfw: props.uri && makeSelectClaimIsNsfw(props.uri)(state),
-    blackListedOutpoints: selectBlackListedOutpoints(state),
-    filteredOutpoints: selectFilteredOutpoints(state),
-    mutedUris: selectMutedChannels(state),
-    blockedUris: selectModerationBlockList(state),
+    banState: selectBanStateForUri(state, props.uri),
     hasVisitedUri: props.uri && makeSelectHasVisitedUri(props.uri)(state),
-    channelIsBlocked: props.uri && makeSelectChannelIsMuted(props.uri)(state),
     isSubscribed: props.uri && makeSelectIsSubscribed(props.uri, true)(state),
     streamingUrl: props.uri && makeSelectStreamingUrlForUri(props.uri)(state),
     wasPurchased: props.uri && makeSelectClaimWasPurchased(props.uri)(state),

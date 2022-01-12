@@ -1,20 +1,28 @@
 // @flow
 import * as ACTIONS from 'constants/action_types';
 import * as SETTINGS from 'constants/settings';
+import * as SHARED_PREFERENCES from 'constants/shared_preferences';
 import { Lbryio } from 'lbryinc';
 import Lbry from 'lbry';
 import { doWalletEncrypt, doWalletDecrypt } from 'redux/actions/wallet';
-import { selectGetSyncIsPending, selectSetSyncIsPending, selectSyncIsLocked } from 'redux/selectors/sync';
+import {
+  selectSyncHash,
+  selectGetSyncIsPending,
+  selectSetSyncIsPending,
+  selectSyncIsLocked,
+} from 'redux/selectors/sync';
 import { makeSelectClientSetting } from 'redux/selectors/settings';
 import { getSavedPassword } from 'util/saved-passwords';
 import { doAnalyticsTagSync, doHandleSyncComplete } from 'redux/actions/app';
 import { selectUserVerifiedEmail } from 'redux/selectors/user';
+import Comments from 'comments';
+import { getSubsetFromKeysArray } from 'util/sync-settings';
 
 let syncTimer = null;
 const SYNC_INTERVAL = 1000 * 60 * 5; // 5 minutes
 const NO_WALLET_ERROR = 'no wallet found for this user';
 const BAD_PASSWORD_ERROR_NAME = 'InvalidPasswordError';
-
+const { CLIENT_SYNC_KEYS } = SHARED_PREFERENCES;
 export function doSetDefaultAccount(success: () => void, failure: (string) => void) {
   return (dispatch: Dispatch) => {
     dispatch({
@@ -154,7 +162,9 @@ export function doGetSync(passedPassword?: string, callback?: (any, ?boolean) =>
     }
   }
 
-  return (dispatch: Dispatch) => {
+  return (dispatch: Dispatch, getState: GetState) => {
+    const state = getState();
+    const localHash = selectSyncHash(state);
     dispatch({
       type: ACTIONS.GET_SYNC_STARTED,
     });
@@ -182,7 +192,7 @@ export function doGetSync(passedPassword?: string, callback?: (any, ?boolean) =>
         const syncHash = response.hash;
         data.syncHash = syncHash;
         data.syncData = response.data;
-        data.changed = response.changed;
+        data.changed = response.changed || syncHash !== localHash;
         data.hasSyncedWallet = true;
 
         if (response.changed) {
@@ -422,8 +432,14 @@ function extractUserState(rawObj: SharedData) {
   return {};
 }
 
+/* This action function should anything SYNC_STATE_POPULATE needs to trigger */
 export function doPopulateSharedUserState(sharedSettings: any) {
-  return (dispatch: Dispatch) => {
+  return (dispatch: Dispatch, getState: GetState) => {
+    const state = getState();
+    const {
+      settings: { clientSettings: currentClientSettings },
+    } = state;
+
     const {
       subscriptions,
       following,
@@ -438,15 +454,25 @@ export function doPopulateSharedUserState(sharedSettings: any) {
       builtinCollections,
       savedCollections,
     } = extractUserState(sharedSettings);
+    const selectedSettings = settings ? getSubsetFromKeysArray(settings, CLIENT_SYNC_KEYS) : {};
+    const mergedClientSettings = { ...currentClientSettings, ...selectedSettings };
+    // possibly move to doGetAndPopulate... in success callback
+    Comments.setServerUrl(
+      mergedClientSettings[SETTINGS.CUSTOM_COMMENTS_SERVER_ENABLED]
+        ? mergedClientSettings[SETTINGS.CUSTOM_COMMENTS_SERVER_URL]
+        : undefined
+    );
+
     dispatch({
-      type: ACTIONS.USER_STATE_POPULATE,
+      type: ACTIONS.SYNC_STATE_POPULATE,
       data: {
         subscriptions,
         following,
         tags,
         blocked,
         coinSwapCodes: coin_swap_codes,
-        settings,
+        walletPrefSettings: settings,
+        mergedClientSettings,
         welcomeVersion: app_welcome_version,
         allowAnalytics: sharing_3P,
         unpublishedCollections,

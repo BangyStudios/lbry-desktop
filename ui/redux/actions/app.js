@@ -1,9 +1,7 @@
-// @if TARGET='app'
 import { execSync } from 'child_process';
 import isDev from 'electron-is-dev';
-import { ipcRenderer, remote } from 'electron';
-// @endif
-import path from 'path';
+import { ipcRenderer } from 'electron';
+import * as remote from '@electron/remote';
 import * as ACTIONS from 'constants/action_types';
 import * as MODALS from 'constants/modal_types';
 import * as SETTINGS from 'constants/settings';
@@ -12,7 +10,7 @@ import * as SHARED_PREFERENCES from 'constants/shared_preferences';
 import { DOMAIN } from 'config';
 import Lbry from 'lbry';
 import { doFetchChannelListMine, doFetchCollectionListMine, doCheckPendingClaims } from 'redux/actions/claims';
-import { makeSelectClaimForUri, makeSelectClaimIsMine, selectMyChannelClaims } from 'redux/selectors/claims';
+import { selectClaimForUri, selectClaimIsMineForUri, selectMyChannelClaims } from 'redux/selectors/claims';
 import { doFetchFileInfos } from 'redux/actions/file_info';
 import { doClearSupport, doBalanceSubscribe } from 'redux/actions/wallet';
 import { doClearPublish } from 'redux/actions/publish';
@@ -33,7 +31,6 @@ import {
   selectUpdateUrl,
   selectUpgradeDownloadItem,
   selectUpgradeDownloadPath,
-  selectUpgradeFilename,
   selectAutoUpdateDeclined,
   selectRemoteVersion,
   selectUpgradeTimer,
@@ -41,7 +38,7 @@ import {
   selectAllowAnalytics,
 } from 'redux/selectors/app';
 import { selectDaemonSettings, makeSelectClientSetting } from 'redux/selectors/settings';
-import { selectUser, selectUserVerifiedEmail } from 'redux/selectors/user';
+import { selectUser } from 'redux/selectors/user';
 import { doSyncLoop, doSetPrefsReady, doPreferenceGet, doPopulateSharedUserState } from 'redux/actions/sync';
 import { doAuthenticate } from 'redux/actions/user';
 import { lbrySettings as config, version as appVersion } from 'package.json';
@@ -49,12 +46,6 @@ import analytics, { SHARE_INTERNAL } from 'analytics';
 import { doSignOutCleanup } from 'util/saved-passwords';
 import { doNotificationSocketConnect } from 'redux/actions/websocket';
 import { stringifyServerParam, shouldSetSetting } from 'util/sync-settings';
-
-// @if TARGET='app'
-const { autoUpdater } = remote.require('electron-updater');
-const { download } = remote.require('electron-dl');
-const Fs = remote.require('fs');
-// @endif
 
 const CHECK_UPGRADE_INTERVAL = 10 * 60 * 1000;
 
@@ -100,38 +91,14 @@ export function doStartUpgrade() {
 
 export function doDownloadUpgrade() {
   return (dispatch, getState) => {
-    // @if TARGET='app'
     const state = getState();
-    // Make a new directory within temp directory so the filename is guaranteed to be available
-    const dir = Fs.mkdtempSync(remote.app.getPath('temp') + path.sep);
-    const upgradeFilename = selectUpgradeFilename(state);
-
-    const options = {
-      onProgress: (p) => dispatch(doUpdateDownloadProgress(Math.round(p * 100))),
-      directory: dir,
-    };
-    download(remote.getCurrentWindow(), selectUpdateUrl(state), options).then((downloadItem) => {
-      /**
-       * TODO: get the download path directly from the download object. It should just be
-       * downloadItem.getSavePath(), but the copy on the main process is being garbage collected
-       * too soon.
-       */
-
-      dispatch({
-        type: ACTIONS.UPGRADE_DOWNLOAD_COMPLETED,
-        data: {
-          downloadItem,
-          path: path.join(dir, upgradeFilename),
-        },
-      });
-    });
-
+    const url = selectUpdateUrl(state);
+    ipcRenderer.send('download-upgrade', { url, options: {} });
     dispatch({
       type: ACTIONS.UPGRADE_DOWNLOAD_STARTED,
     });
     dispatch(doHideModal());
     dispatch(doOpenModal(MODALS.DOWNLOADING));
-    // @endif
   };
 }
 
@@ -222,7 +189,7 @@ export function doCheckUpgradeAvailable() {
       const autoUpdateDeclined = selectAutoUpdateDeclined(state);
 
       if (!autoUpdateDeclined && !isDev) {
-        autoUpdater.checkForUpdates();
+        ipcRenderer.send('check-for-updates');
       }
       return;
     }
@@ -327,16 +294,10 @@ export function doAlertError(errorList) {
 }
 
 export function doAlertWaitingForSync() {
-  return (dispatch, getState) => {
-    const state = getState();
-    const authenticated = selectUserVerifiedEmail(state);
-
+  return (dispatch) => {
     dispatch(
       doToast({
-        message:
-          !authenticated && IS_WEB
-            ? __('Sign in or create an account to change this setting.')
-            : __('Please wait a bit, we are still getting your account ready.'),
+        message: __('Please wait a bit, we are still getting your account ready.'),
         isError: false,
       })
     );
@@ -348,7 +309,7 @@ export function doDaemonReady() {
     const state = getState();
 
     // TODO: call doFetchDaemonSettings, then get usage data, and call doAuthenticate once they are loaded into the store
-    const shareUsageData = IS_WEB || window.localStorage.getItem(SHARE_INTERNAL) === 'true';
+    const shareUsageData = window.localStorage.getItem(SHARE_INTERNAL) === 'true';
 
     dispatch(
       doAuthenticate(
@@ -468,8 +429,9 @@ export function doToggleSearchExpanded() {
 export function doAnalyticsView(uri, timeToStart) {
   return (dispatch, getState) => {
     const state = getState();
-    const { txid, nout, claim_id: claimId } = makeSelectClaimForUri(uri)(state);
-    const claimIsMine = makeSelectClaimIsMine(uri)(state);
+    const claim = selectClaimForUri(state, uri);
+    const { txid, nout, claim_id: claimId } = claim;
+    const claimIsMine = selectClaimIsMineForUri(state, claim);
     const outpoint = `${txid}:${nout}`;
 
     if (claimIsMine) {
@@ -483,13 +445,13 @@ export function doAnalyticsView(uri, timeToStart) {
 export function doAnalyticsBuffer(uri, bufferData) {
   return (dispatch, getState) => {
     const state = getState();
-    const claim = makeSelectClaimForUri(uri)(state);
+    const claim = selectClaimForUri(state, uri);
     const user = selectUser(state);
     const {
       value: { video, audio, source },
     } = claim;
-    const timeAtBuffer = parseInt(bufferData.currentTime * 1000);
-    const bufferDuration = parseInt(bufferData.secondsToLoad * 1000);
+    const timeAtBuffer = parseInt(bufferData.currentTime ? bufferData.currentTime * 1000 : 0);
+    const bufferDuration = parseInt(bufferData.secondsToLoad ? bufferData.secondsToLoad * 1000 : 0);
     const fileDurationInSeconds = (video && video.duration) || (audio && audio.duration);
     const fileSize = source.size; // size in bytes
     const fileSizeInBits = fileSize * 8;
@@ -535,7 +497,7 @@ export function doSignIn() {
   return (dispatch, getState) => {
     const state = getState();
     const user = selectUser(state);
-    const notificationsEnabled = user.experimental_ui; // what is notifications?
+    const notificationsEnabled = user.experimental_ui;
 
     dispatch(doNotificationSocketConnect(notificationsEnabled));
 
@@ -607,19 +569,13 @@ export function doGetAndPopulatePreferences() {
     const syncEnabled = makeSelectClientSetting(SETTINGS.ENABLE_SYNC)(state);
     const hasVerifiedEmail = state.user && state.user.user && state.user.user.has_verified_email;
     let preferenceKey;
-    // @if TARGET='app'
     preferenceKey = syncEnabled && hasVerifiedEmail ? 'shared' : 'local';
-    // @endif
-    // @if TARGET='web'
-    preferenceKey = 'shared';
-    // @endif
 
     function successCb(savedPreferences) {
       const successState = getState();
       const daemonSettings = selectDaemonSettings(successState);
       if (savedPreferences !== null) {
         dispatch(doPopulateSharedUserState(savedPreferences));
-        // @if TARGET='app'
 
         const { settings } = savedPreferences.value;
         if (settings) {
@@ -634,9 +590,9 @@ export function doGetAndPopulatePreferences() {
                 }
               }
             }
+            // probably set commentServer here instead of in doPopulateSharedUserState()
           });
         }
-        // @endif
       } else {
         dispatch(doSetPrefsReady());
       }
@@ -666,9 +622,8 @@ export function doGetAndPopulatePreferences() {
 export function doHandleSyncComplete(error, hasNewData) {
   return (dispatch) => {
     if (!error) {
-      dispatch(doGetAndPopulatePreferences());
-
       if (hasNewData) {
+        dispatch(doGetAndPopulatePreferences());
         // we just got sync data, better update our channels
         dispatch(doFetchChannelListMine());
       }

@@ -12,15 +12,7 @@ import I18nMessage from 'component/i18nMessage';
 import ChannelThumbnail from 'component/channelThumbnail';
 import { DOMAIN, ENABLE_UI_NOTIFICATIONS } from 'config';
 import { IS_MAC } from 'component/app/view';
-
-const HOME = {
-  title: 'Home',
-  link: `/`,
-  icon: ICONS.HOME,
-  onClick: () => {
-    if (window.location.pathname === '/') window.location.reload();
-  },
-};
+import { useHistory } from 'react-router';
 
 const RECENT_FROM_FOLLOWING = {
   title: 'Following --[sidebar button]--',
@@ -71,6 +63,18 @@ function SideNavigation(props: Props) {
     followedTags,
   } = props;
 
+  const {
+    location: { pathname },
+  } = useHistory();
+
+  const HOME = {
+    title: 'Home',
+    link: `/`,
+    icon: ICONS.HOME,
+    onClick: () => {
+      if (pathname === '/') window.location.reload();
+    },
+  };
   const FULL_LINKS: Array<SideNavLink> = [
     {
       title: 'Your Tags',
@@ -84,7 +88,7 @@ function SideNavigation(props: Props) {
       icon: ICONS.DISCOVER,
     },
     {
-      title: IS_WEB ? 'Purchased' : 'Library',
+      title: 'Library',
       link: `/$/${PAGES.LIBRARY}`,
       icon: ICONS.PURCHASED,
       hideForUnauth: true,
@@ -206,7 +210,6 @@ function SideNavigation(props: Props) {
   SIDE_LINKS.push(...FULL_LINKS);
 
   const [pulseLibrary, setPulseLibrary] = React.useState(false);
-  const isPersonalized = !IS_WEB || isAuthenticated;
   const isAbsolute = isOnFilePage || isMediumScreen;
   const microNavigation = !sidebarOpen || isMediumScreen;
   const subLinks = email
@@ -308,7 +311,7 @@ function SideNavigation(props: Props) {
               {SIDE_LINKS.map((linkProps) => {
                 //   $FlowFixMe
                 const { hideForUnauth, ...passedProps } = linkProps;
-                return !email && linkProps.hideForUnauth && IS_WEB ? null : (
+                return (
                   <li key={linkProps.route || linkProps.link}>
                     <Button
                       {...passedProps}
@@ -329,14 +332,14 @@ function SideNavigation(props: Props) {
               })}
             </ul>
 
-            {sidebarOpen && isPersonalized && subscriptions && subscriptions.length > 0 && (
+            {sidebarOpen && subscriptions && subscriptions.length > 0 && (
               <ul className="navigation__secondary navigation-links">
                 {subscriptions.map((subscription) => (
                   <SubscriptionListItem key={subscription.uri} subscription={subscription} />
                 ))}
               </ul>
             )}
-            {sidebarOpen && isPersonalized && followedTags && followedTags.length > 0 && (
+            {sidebarOpen && followedTags && followedTags.length > 0 && (
               <ul className="navigation__secondary navigation-links navigation-links--small">
                 {followedTags.map(({ name }, key) => (
                   <li key={name} className="navigation-link__wrapper">
@@ -367,7 +370,7 @@ function SideNavigation(props: Props) {
                 {SIDE_LINKS.map((linkProps) => {
                   //   $FlowFixMe
                   const { hideForUnauth, link, route, ...passedProps } = linkProps;
-                  return !email && linkProps.hideForUnauth && IS_WEB ? null : (
+                  return (
                     <li key={route || link}>
                       <Button
                         {...passedProps}
@@ -390,7 +393,7 @@ function SideNavigation(props: Props) {
                 {subLinks.map((linkProps) => {
                   const { hideForUnauth, ...passedProps } = linkProps;
 
-                  return !email && hideForUnauth && IS_WEB ? null : (
+                  return (
                     <li key={linkProps.title} className="mobile-only">
                       <Button
                         {...passedProps}
@@ -405,14 +408,14 @@ function SideNavigation(props: Props) {
                   );
                 })}
               </ul>
-              {sidebarOpen && isPersonalized && subscriptions && subscriptions.length > 0 && (
+              {sidebarOpen && subscriptions && subscriptions.length > 0 && (
                 <ul className="navigation__secondary navigation-links">
                   {subscriptions.map((subscription) => (
                     <SubscriptionListItem key={subscription.uri} subscription={subscription} />
                   ))}
                 </ul>
               )}
-              {sidebarOpen && isPersonalized && followedTags && followedTags.length > 0 && (
+              {sidebarOpen && followedTags && followedTags.length > 0 && (
                 <ul className="navigation__secondary navigation-links navigation-links--small">
                   {followedTags.map(({ name }, key) => (
                     <li key={name} className="navigation-link__wrapper">

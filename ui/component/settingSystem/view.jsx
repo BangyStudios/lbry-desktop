@@ -17,10 +17,9 @@ import Spinner from 'component/spinner';
 import { getPasswordFromCookie } from 'util/saved-passwords';
 import * as DAEMON_SETTINGS from 'constants/daemon_settings';
 import { formatBytes } from 'util/format-bytes';
+import SettingEnablePrereleases from 'component/settingEnablePrereleases';
 
-// @if TARGET='app'
 const IS_MAC = process.platform === 'darwin';
-// @endif
 const BYTES_PER_MB = 1048576;
 
 type Price = {
@@ -42,8 +41,11 @@ type DaemonSettings = {
 
 type DaemonStatus = {
   disk_space: {
-    running: boolean,
-    space_used: string,
+    content_blobs_storage_used_mb: string,
+    published_blobs_storage_used_mb: string,
+    running: true,
+    seed_blobs_storage_used_mb: string,
+    total_used_mb: string,
   },
 };
 
@@ -91,15 +93,18 @@ export default function SettingSystem(props: Props) {
   const [clearingCache, setClearingCache] = React.useState(false);
   const [storedPassword, setStoredPassword] = React.useState(false);
   const { disk_space } = daemonStatus;
-  const spaceUsed = Number(disk_space.space_used);
+  const contentSpaceUsed = Number(disk_space.content_blobs_storage_used_mb);
+  const networkSpaceUsed = Number(disk_space.seed_blobs_storage_used_mb);
   const blobLimitSetting = daemonSettings[DAEMON_SETTINGS.BLOB_STORAGE_LIMIT_MB];
-  const [blobSpaceLimitGB, setBlobSpaceLimit] = React.useState(blobLimitSetting ? blobLimitSetting / 1024 : 0);
-  // const debouncedBlobSpaceLimitGB = useDebounce(blobSpaceLimitGB || 0, 500);
+  const networkLimitSetting = daemonSettings[DAEMON_SETTINGS.NETWORK_STORAGE_LIMIT_MB];
+  const [contentBlobSpaceLimitGB, setContentBlobSpaceLimit] = React.useState(
+    blobLimitSetting ? blobLimitSetting / 1024 : 0
+  );
+  const [networkBlobSpaceLimitGB, setNetworkBlobSpaceLimit] = React.useState(
+    networkLimitSetting ? networkLimitSetting / 1024 : 0
+  );
   const [limitSpace, setLimitSpace] = React.useState(Boolean(blobLimitSetting));
-  console.log('spaceUsed', spaceUsed, 'blobLimit', blobLimitSetting);
-  // @if TARGET='app'
   const { available: ffmpegAvailable, which: ffmpegPath } = ffmpegStatus;
-  // @endif
 
   function onChangeEncryptWallet() {
     if (walletEncrypted) {
@@ -113,11 +118,19 @@ export default function SettingSystem(props: Props) {
     confirmForgetPassword({ callback: () => setStoredPassword(false) });
   }
 
-  function updateBlobLimitField(gb) {
+  function updateContentBlobLimitField(gb) {
     if (gb === 0) {
-      setBlobSpaceLimit(0);
+      setContentBlobSpaceLimit(0);
     } else if (!gb || !isNaN(gb)) {
-      setBlobSpaceLimit(gb);
+      setContentBlobSpaceLimit(gb);
+    }
+  }
+
+  function updateNetworkBlobLimitField(gb) {
+    if (gb === 0) {
+      setNetworkBlobSpaceLimit(0);
+    } else if (!gb || !isNaN(gb)) {
+      setNetworkBlobSpaceLimit(gb);
     }
   }
 
@@ -126,21 +139,27 @@ export default function SettingSystem(props: Props) {
     if (!value) {
       setDaemonSetting(DAEMON_SETTINGS.BLOB_STORAGE_LIMIT_MB, String(0));
     } else {
-      const spaceLimitMB = blobSpaceLimitGB * 1024;
+      const spaceLimitMB = contentBlobSpaceLimitGB * 1024;
       setDaemonSetting(DAEMON_SETTINGS.BLOB_STORAGE_LIMIT_MB, String(spaceLimitMB));
     }
   }
 
-  function handleSetBlobSpaceLimit() {
-    const spaceLimitMB = blobSpaceLimitGB * 1024;
+  function handleSetContentBlobSpaceLimit() {
+    const spaceLimitMB = contentBlobSpaceLimitGB * 1024;
     if (!isNaN(spaceLimitMB) && blobLimitSetting !== spaceLimitMB * 1024) {
       setDaemonSetting(DAEMON_SETTINGS.BLOB_STORAGE_LIMIT_MB, String(spaceLimitMB));
     }
   }
 
+  function handleSetNetworkBlobSpaceLimit() {
+    const spaceLimitMB = networkBlobSpaceLimitGB * 1024;
+    if (!isNaN(spaceLimitMB) && blobLimitSetting !== spaceLimitMB * 1024) {
+      setDaemonSetting(DAEMON_SETTINGS.NETWORK_STORAGE_LIMIT_MB, String(spaceLimitMB));
+    }
+  }
+
   // Update ffmpeg variables
   React.useEffect(() => {
-    // @if TARGET='app'
     const { available } = ffmpegStatus;
     const { ffmpeg_path: ffmpegPath } = daemonSettings;
     if (!available) {
@@ -149,19 +168,16 @@ export default function SettingSystem(props: Props) {
       }
       findFFmpeg();
     }
-    // @endif
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update storedPassword state
   React.useEffect(() => {
-    if (isAuthenticated || !IS_WEB) {
-      updateWalletStatus();
-      getPasswordFromCookie().then((p) => {
-        if (typeof p === 'string') {
-          setStoredPassword(true);
-        }
-      });
-    }
+    updateWalletStatus();
+    getPasswordFromCookie().then((p) => {
+      if (typeof p === 'string') {
+        setStoredPassword(true);
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -186,7 +202,6 @@ export default function SettingSystem(props: Props) {
             </SettingsRow>
             {/* @endif */}
 
-            {/* @if TARGET='app' */}
             <SettingsRow
               title={__('Save all viewed content to your downloads directory')}
               subtitle={__(
@@ -205,15 +220,22 @@ export default function SettingSystem(props: Props) {
               multirow
               subtitle={
                 <React.Fragment>
+                  {__('Content Data Hosting helps to seed things that you watch and download.')}{' '}
+                  {__('Network Data Hosting allows the p2p network to store blobs unrelated to your browsing.')}{' '}
                   {__("If disabled, LBRY will be very sad and you won't be helping improve the network.")}{' '}
                   {__('If you set a limit, playing videos may exceed your limit until cleanup runs every 30 minutes.')}{' '}
                   <Button button="link" label={__('Learn more')} href="https://lbry.com/faq/host-content" />.
                   <p className={'help'}>
-                    {`Using ${formatBytes(spaceUsed * BYTES_PER_MB)} of ${
+                    {`Content Hosting using ${formatBytes(contentSpaceUsed * BYTES_PER_MB)} of ${
                       daemonSettings[DAEMON_SETTINGS.BLOB_STORAGE_LIMIT_MB]
                         ? formatBytes(daemonSettings[DAEMON_SETTINGS.BLOB_STORAGE_LIMIT_MB] * BYTES_PER_MB)
                         : 'Unlimited'
                     }`}
+                  </p>
+                  <p className={'help'}>
+                    {`Network Hosting using ${formatBytes(networkSpaceUsed * BYTES_PER_MB)} of ${formatBytes(
+                      daemonSettings[DAEMON_SETTINGS.NETWORK_STORAGE_LIMIT_MB] * BYTES_PER_MB
+                    )}`}
                   </p>
                 </React.Fragment>
               }
@@ -227,47 +249,61 @@ export default function SettingSystem(props: Props) {
                   label={__('Enable Data Hosting')}
                 />
               </fieldset-section>
-              <fieldset-section>
-                <FormField
-                  type="checkbox"
-                  name="limit_space_used"
-                  onChange={() => handleLimitSpace(!limitSpace)}
-                  checked={limitSpace}
-                  label={__('Limit Space Used')}
-                />
-              </fieldset-section>
+              {daemonSettings.save_blobs && (
+                <fieldset-section>
+                  <FormField
+                    type="checkbox"
+                    name="limit_space_used"
+                    onChange={() => handleLimitSpace(!limitSpace)}
+                    checked={limitSpace}
+                    label={__('Limit Hosting for Content you Use')}
+                  />
+                </fieldset-section>
+              )}
 
-              {limitSpace && (
+              {daemonSettings.save_blobs && limitSpace && (
                 <FormField
-                  name="blob_limit_gb"
+                  name="content_blob_limit_gb"
                   type="text"
-                  label={__(`Limit (GB)`)}
-                  helper={__(
-                    'Data over the limit will be deleted within 30 minutes. This will make the Yrbl cry a little bit.'
-                  )}
+                  label={__(`Content: Limit (GB)`)}
                   disabled={!daemonSettings.save_blobs}
-                  onChange={(e) => updateBlobLimitField(e.target.value)}
-                  value={blobSpaceLimitGB}
+                  onChange={(e) => updateContentBlobLimitField(e.target.value)}
+                  value={contentBlobSpaceLimitGB}
                   inputButton={
                     <Button
-                      disabled={isNaN(blobSpaceLimitGB)}
+                      disabled={isNaN(contentBlobSpaceLimitGB)}
                       button="primary"
                       label={__('Apply')}
-                      onClick={handleSetBlobSpaceLimit}
+                      onClick={handleSetContentBlobSpaceLimit}
+                    />
+                  }
+                />
+              )}
+              {daemonSettings.save_blobs && (
+                <FormField
+                  name="network_blob_limit_gb"
+                  type="text"
+                  label={__(`Network: Allow (GB)`)}
+                  disabled={!daemonSettings.save_blobs}
+                  onChange={(e) => updateNetworkBlobLimitField(e.target.value)}
+                  value={networkBlobSpaceLimitGB}
+                  inputButton={
+                    <Button
+                      disabled={isNaN(networkBlobSpaceLimitGB)}
+                      button="primary"
+                      label={__('Apply')}
+                      onClick={handleSetNetworkBlobSpaceLimit}
                     />
                   }
                 />
               )}
             </SettingsRow>
-            {/* @endif */}
-
-            {/* @if TARGET='app' */}
             <SettingsRow
               title={__('Share usage and diagnostic data')}
               subtitle={
                 <React.Fragment>
                   {__(
-                    `This is information like error logging, performance tracking, and usage statistics. It includes your IP address and basic system details, but no other identifying information (unless you sign in to lbry.tv)`
+                    `This is information like error logging, performance tracking, and usage statistics. It includes your IP address and basic system details, but no other identifying information (unless you connect to a cloud service)`
                   )}{' '}
                   <Button button="link" label={__('Learn more')} href="https://lbry.com/privacypolicy" />
                 </React.Fragment>
@@ -296,9 +332,6 @@ export default function SettingSystem(props: Props) {
                 helper={__('We use detailed analytics to improve all aspects of the LBRY experience.')}
               />
             </SettingsRow>
-            {/* @endif */}
-
-            {/* @if TARGET='app' */}
             {/* Auto launch in a hidden state doesn't work on mac https://github.com/Teamwork/node-auto-launch/issues/81 */}
             {!IS_MAC && (
               <SettingsRow
@@ -310,15 +343,15 @@ export default function SettingSystem(props: Props) {
                 <SettingAutoLaunch noLabels />
               </SettingsRow>
             )}
-            {/* @endif */}
-
-            {/* @if TARGET='app' */}
             <SettingsRow title={__('Leave app running in notification area when the window is closed')}>
               <SettingClosingBehavior noLabels />
             </SettingsRow>
-            {/* @endif */}
-
-            {/* @if TARGET='app' */}
+            <SettingsRow
+              title={__('Enable Upgrade to Test Builds')}
+              subtitle={__('Prereleases may break things and we may not be able to fix them for you.')}
+            >
+              <SettingEnablePrereleases />
+            </SettingsRow>
             <SettingsRow
               title={
                 <span>
@@ -379,9 +412,6 @@ export default function SettingSystem(props: Props) {
                 )}
               </p>
             </SettingsRow>
-            {/* @endif */}
-
-            {/* @if TARGET='app' */}
             <SettingsRow
               title={__('Encrypt my wallet with a custom password')}
               subtitle={
@@ -424,9 +454,6 @@ export default function SettingSystem(props: Props) {
                 />
               </SettingsRow>
             )}
-            {/* @endif */}
-
-            {/* @if TARGET='app' */}
             <SettingsRow
               title={__('Max connections')}
               subtitle={__(
@@ -446,7 +473,6 @@ export default function SettingSystem(props: Props) {
               )}
             />
             */}
-
               <fieldset-section>
                 <FormField
                   name="max_connections"
@@ -475,8 +501,6 @@ export default function SettingSystem(props: Props) {
             <SettingsRow title={__('Share url')} multirow>
               <SettingShareUrl />
             </SettingsRow>
-            {/* @endif */}
-
             <SettingsRow
               title={__('Clear application cache')}
               subtitle={__('This might fix issues that you are having. Your wallet will not be affected.')}

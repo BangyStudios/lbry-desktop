@@ -5,7 +5,12 @@ import * as MODALS from 'constants/modal_types';
 import { ipcRenderer } from 'electron';
 // @endif
 import { doOpenModal } from 'redux/actions/app';
-import { makeSelectClaimForUri, makeSelectClaimIsMine, makeSelectClaimWasPurchased } from 'redux/selectors/claims';
+import {
+  makeSelectClaimForUri,
+  selectClaimForUri,
+  makeSelectClaimIsMine,
+  makeSelectClaimWasPurchased,
+} from 'redux/selectors/claims';
 import {
   makeSelectFileInfoForUri,
   selectFileInfosByOutpoint,
@@ -159,14 +164,14 @@ export function doPlayUri(
     const alreadyDownloaded = fileInfo && (fileInfo.completed || (fileInfo.blobs_remaining === 0 && uriIsStreamable));
     const alreadyDownloading = fileInfo && !!downloadingByOutpoint[fileInfo.outpoint];
 
-    if (!IS_WEB && (alreadyDownloading || alreadyDownloaded)) {
+    if (alreadyDownloading || alreadyDownloaded) {
       return;
     }
 
     const daemonSettings = selectDaemonSettings(state);
     const costInfo = makeSelectCostInfoForUri(uri)(state);
     const cost = (costInfo && Number(costInfo.cost)) || 0;
-    const saveFile = !IS_WEB && (!uriIsStreamable ? true : daemonSettings.save_files || saveFileOverride || cost > 0);
+    const saveFile = !uriIsStreamable ? true : daemonSettings.save_files || saveFileOverride || cost > 0;
     const instantPurchaseEnabled = makeSelectClientSetting(SETTINGS.INSTANT_PURCHASE_ENABLED)(state);
     const instantPurchaseMax = makeSelectClientSetting(SETTINGS.INSTANT_PURCHASE_MAX)(state);
 
@@ -216,7 +221,7 @@ export function doPlayUri(
 export function savePosition(uri: string, position: number) {
   return (dispatch: Dispatch, getState: () => any) => {
     const state = getState();
-    const claim = makeSelectClaimForUri(uri)(state);
+    const claim = selectClaimForUri(state, uri);
     const { claim_id: claimId, txid, nout } = claim;
     const outpoint = `${txid}:${nout}`;
 

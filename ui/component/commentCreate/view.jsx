@@ -32,7 +32,7 @@ const MENTION_DEBOUNCE_MS = 100;
 type Props = {
   uri: string,
   claim: StreamClaim,
-  channels: ?Array<ChannelClaim>,
+  hasChannels: boolean,
   isNested: boolean,
   isFetchingChannels: boolean,
   parentId: string,
@@ -60,7 +60,7 @@ export function CommentCreate(props: Props) {
   const {
     uri,
     claim,
-    channels,
+    hasChannels,
     isNested,
     isFetchingChannels,
     isReply,
@@ -123,7 +123,6 @@ export function CommentCreate(props: Props) {
   const claimId = claim && claim.claim_id;
   const signingChannel = (claim && claim.signing_channel) || claim;
   const channelUri = signingChannel && signingChannel.permanent_url;
-  const hasChannels = channels && channels.length;
   const charCount = commentValue ? commentValue.length : 0;
   const disabled = deletedComment || isSubmitting || isFetchingChannels || !commentValue.length || pauseQuickSend;
   const channelId = getChannelIdFromClaim(claim);
@@ -164,7 +163,7 @@ export function CommentCreate(props: Props) {
   function handleCommentChange(event) {
     let commentValue;
     if (isReply) {
-      commentValue = event.target.value;
+      commentValue = advancedEditor ? event : event.target.value;
     } else {
       commentValue = advancedEditor ? event : event.target.value;
     }
@@ -444,7 +443,7 @@ export function CommentCreate(props: Props) {
       >
         <FormField type="textarea" name={'comment_signup_prompt'} placeholder={__('Say something about this...')} />
         <div className="section__actions--no-margin">
-          <Button disabled button="primary" label={__('Post --[button to submit something]--')} requiresAuth={IS_WEB} />
+          <Button disabled button="primary" label={__('Post --[button to submit something]--')} />
         </div>
       </div>
     );
@@ -513,7 +512,7 @@ export function CommentCreate(props: Props) {
       )}
       <FormField
         disabled={isFetchingChannels}
-        type={'textarea'}
+        type={advancedEditor ? 'markdown' : 'textarea'}
         name={isReply ? 'content_reply' : 'content_description'}
         ref={formFieldRef}
         className={isReply ? 'content_reply' : 'content_comment'}
@@ -554,7 +553,6 @@ export function CommentCreate(props: Props) {
               icon={activeTab === TAB_LBC ? ICONS.LBC : ICONS.FINANCE}
               label={__('Review')}
               onClick={() => setIsReviewingSupportComment(true)}
-              requiresAuth={IS_WEB}
             />
 
             <Button
@@ -581,7 +579,6 @@ export function CommentCreate(props: Props) {
                     ? __('Commenting...')
                     : __('Comment --[button to submit something]--')
                 }
-                requiresAuth={IS_WEB}
               />
             )}
             {!supportDisabled && !claimIsMine && (
@@ -596,20 +593,6 @@ export function CommentCreate(props: Props) {
                     setActiveTab(TAB_LBC);
                   }}
                 />
-                {/* @if TARGET='web' */}
-                {stripeEnvironment && (
-                  <Button
-                    disabled={disabled}
-                    button="alt"
-                    className="thisButton"
-                    icon={ICONS.FINANCE}
-                    onClick={() => {
-                      setIsSupportComment(true);
-                      setActiveTab(TAB_FIAT);
-                    }}
-                  />
-                )}
-                {/* @endif */}
               </>
             )}
             {isReply && !minTip && (

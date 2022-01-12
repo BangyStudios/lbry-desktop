@@ -49,14 +49,14 @@ jobs:
           yarn global add cross-env
           yarn
           yarn build
-          node ./build/afterSignHook.js
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
           NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          WIN_CSC_LINK: https://raw.githubusercontent.com/lbryio/lbry-desktop/master/build/win-csc-2021-2022-08.p12
+
+          WIN_CSC_LINK: https://raw.githubusercontent.com/lbryio/lbry-desktop/master/build/cert-2021-2022.pfx
           CSC_LINK: https://s3.amazonaws.com/files.lbry.io/cert/osx-csc-2021-2022.p12
 
           # UI
@@ -94,7 +94,19 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         if: |
-          github.event.pull_request.head.repo.full_name == github.repository
+          startsWith(runner.os, 'windows')
         with:
           name: Windows
           path: ./dist/electron/*.*
+      - uses: jakejarvis/s3-sync-action@master
+        if: |
+          startsWith(runner.os, 'linux')
+        with:
+          args: --acl public-read --follow-symlinks --exclude '*' --include '*.deb' --include '*.AppImage' --include '*.dmg'
+        env:
+          AWS_S3_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARTIFACTS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARTIFACTS_SECRET }}
+          AWS_REGION: 'us-east-1'
+          SOURCE_DIR: 'dist/electron'
+          DEST_DIR: 'app/release'

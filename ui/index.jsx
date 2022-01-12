@@ -5,13 +5,22 @@ import SnackBar from 'component/snackBar';
 import SplashScreen from 'component/splash';
 import * as ACTIONS from 'constants/action_types';
 import { changeZoomFactor } from 'util/zoomWindow';
-import { ipcRenderer, remote, shell } from 'electron';
+import { ipcRenderer, shell } from 'electron';
+import * as remote from '@electron/remote';
 import moment from 'moment';
 import * as MODALS from 'constants/modal_types';
 import React, { Fragment, useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Provider } from 'react-redux';
-import { doDaemonReady, doAutoUpdate, doOpenModal, doHideModal, doToggle3PAnalytics } from 'redux/actions/app';
+import * as SETTINGS from 'constants/settings';
+import {
+  doDaemonReady,
+  doAutoUpdate,
+  doOpenModal,
+  doHideModal,
+  doToggle3PAnalytics,
+  doUpdateDownloadProgress,
+} from 'redux/actions/app';
 import { isURIValid } from 'util/lbryURI';
 import { setSearchApi } from 'redux/actions/search';
 import { doSetLanguage, doFetchLanguage, doUpdateIsNightAsync } from 'redux/actions/settings';
@@ -26,6 +35,7 @@ import { PersistGate } from 'redux-persist/integration/react';
 import analytics from 'analytics';
 import { doToast } from 'redux/actions/notifications';
 import { getAuthToken, setAuthToken, doAuthTokenRefresh } from 'util/saved-passwords';
+import { makeSelectClientSetting } from 'redux/selectors/settings';
 import { DEFAULT_LANGUAGE, LBRY_API_URL } from 'config';
 
 // Import 3rd-party styles before ours for the current way we are code-splitting.
@@ -107,6 +117,19 @@ ipcRenderer.on('open-uri-requested', (event, url, newSession) => {
   handleError();
 });
 
+ipcRenderer.on('download-progress-update', (e, p) => {
+  app.store.dispatch(doUpdateDownloadProgress(Math.round(p.percent * 100)));
+});
+
+ipcRenderer.on('download-update-complete', (e, c) => {
+  app.store.dispatch({
+    type: ACTIONS.UPGRADE_DOWNLOAD_COMPLETED,
+    data: {
+      path: c.path,
+    },
+  });
+});
+
 ipcRenderer.on('language-set', (event, language) => {
   app.store.dispatch(doSetLanguage(language));
 });
@@ -162,8 +185,18 @@ document.addEventListener('drop', (event) => {
 
 function AppWrapper() {
   // Splash screen and sdk setup not needed on web
-  const [readyToLaunch, setReadyToLaunch] = useState(IS_WEB);
+  const [readyToLaunch, setReadyToLaunch] = useState(false);
   const [persistDone, setPersistDone] = useState(false);
+
+  useEffect(() => {
+    if (persistDone) {
+      const state = store.getState();
+      const enabled = makeSelectClientSetting(SETTINGS.ENABLE_PRERELEASE_UPDATES)(state);
+      if (enabled) {
+        autoUpdater.allowPrerelease = true;
+      }
+    }
+  }, [persistDone]);
 
   useEffect(() => {
     // @if TARGET='app'
