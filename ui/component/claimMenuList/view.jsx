@@ -39,7 +39,7 @@ type Props = {
   doChannelUnmute: (string) => void,
   doCommentModBlock: (string) => void,
   doCommentModUnBlock: (string) => void,
-  doCommentModBlockAsAdmin: (string, string) => void,
+  doCommentModBlockAsAdmin: (string, ?string, ?string) => void,
   doCommentModUnBlockAsAdmin: (string, string) => void,
   doCollectionEdit: (string, any) => void,
   hasClaimInWatchLater: boolean,
@@ -60,6 +60,9 @@ type Props = {
   resolvedList: boolean,
   fetchCollectionItems: (string) => void,
   doToggleShuffleList: (string) => void,
+  lastUsedCollection: ?Collection,
+  hasClaimInLastUsedCollection: boolean,
+  lastUsedCollectionIsNotBuiltin: boolean,
 };
 
 function ClaimMenuList(props: Props) {
@@ -100,10 +103,18 @@ function ClaimMenuList(props: Props) {
     resolvedList,
     fetchCollectionItems,
     doToggleShuffleList,
+    lastUsedCollection,
+    hasClaimInLastUsedCollection,
+    lastUsedCollectionIsNotBuiltin,
   } = props;
   const [doShuffle, setDoShuffle] = React.useState(false);
   const incognitoClaim = contentChannelUri && !contentChannelUri.includes('@');
   const isChannel = !incognitoClaim && !contentSigningChannel;
+  // $FlowFixMe
+  const claimLength = claim && claim.value && claim.value.claims && claim.value.claims.length;
+  // $FlowFixMe
+  const claimCount = editedCollection ? editedCollection.items.length : claimLength;
+  const isEmptyCollection = (Number(claimCount) || 0) <= 0;
   const { channelName } = parseURI(contentChannelUri);
   const showDelete = claimIsMine || (fileInfo && (fileInfo.written_bytes > 0 || fileInfo.blobs_completed > 0));
   const subscriptionLabel = repostedClaim
@@ -157,11 +168,9 @@ function ClaimMenuList(props: Props) {
     doToast({
       message: source ? __('Item removed from %name%', { name }) : __('Item added to %name%', { name }),
     });
-    doCollectionEdit(collectionId, {
-      claims: [contentClaim],
-      remove: source,
-      type: 'playlist',
-    });
+    if (contentClaim) {
+      doCollectionEdit(collectionId, { uris: [contentClaim.permanent_url], remove: source, type: 'playlist' });
+    }
   }
 
   function handleFollow() {
@@ -228,7 +237,7 @@ function ClaimMenuList(props: Props) {
     if (channelIsAdminBlocked) {
       doCommentModUnBlockAsAdmin(contentChannelUri, '');
     } else {
-      doCommentModBlockAsAdmin(contentChannelUri, '');
+      doCommentModBlockAsAdmin(contentChannelUri, undefined, undefined);
     }
   }
 
@@ -293,18 +302,20 @@ function ClaimMenuList(props: Props) {
                   {__('View List')}
                 </a>
               </MenuItem>
-              <MenuItem
-                className="comment__menu-option"
-                onSelect={() => {
-                  if (!resolvedList) fetchItems();
-                  setDoShuffle(true);
-                }}
-              >
-                <div className="menu__link">
-                  <Icon aria-hidden icon={ICONS.SHUFFLE} />
-                  {__('Shuffle Play')}
-                </div>
-              </MenuItem>
+              {!isEmptyCollection && (
+                <MenuItem
+                  className="comment__menu-option"
+                  onSelect={() => {
+                    if (!resolvedList) fetchItems();
+                    setDoShuffle(true);
+                  }}
+                >
+                  <div className="menu__link">
+                    <Icon aria-hidden icon={ICONS.SHUFFLE} />
+                    {__('Shuffle Play')}
+                  </div>
+                </MenuItem>
+              )}
               {isMyCollection && (
                 <>
                   <MenuItem
@@ -361,6 +372,22 @@ function ClaimMenuList(props: Props) {
                     {__('Add to Lists')}
                   </div>
                 </MenuItem>
+                {lastUsedCollection && lastUsedCollectionIsNotBuiltin && (
+                  <MenuItem
+                    className="comment__menu-option"
+                    onSelect={() =>
+                      handleAdd(hasClaimInLastUsedCollection, lastUsedCollection.name, lastUsedCollection.id)
+                    }
+                  >
+                    <div className="menu__link">
+                      {!hasClaimInLastUsedCollection && <Icon aria-hidden icon={ICONS.ADD} />}
+                      {hasClaimInLastUsedCollection && <Icon aria-hidden icon={ICONS.DELETE} />}
+                      {!hasClaimInLastUsedCollection &&
+                        __('Add to %collection%', { collection: lastUsedCollection.name })}
+                      {hasClaimInLastUsedCollection && __('In %collection%', { collection: lastUsedCollection.name })}
+                    </div>
+                  </MenuItem>
+                )}
                 <hr className="menu__separator" />
               </>
             )

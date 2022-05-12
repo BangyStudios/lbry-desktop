@@ -22,7 +22,7 @@ import { doToast } from 'redux/actions/notifications';
 import { doPurchaseUri } from 'redux/actions/file';
 import Lbry from 'lbry';
 import * as SETTINGS from 'constants/settings';
-import { makeSelectCostInfoForUri, Lbryio } from 'lbryinc';
+import { selectCostInfoForUri, Lbryio } from 'lbryinc';
 import { makeSelectClientSetting, selectosNotificationsEnabled, selectDaemonSettings } from 'redux/selectors/settings';
 
 const DOWNLOAD_POLL_INTERVAL = 1000;
@@ -110,6 +110,8 @@ export function doSetPrimaryUri(uri: ?string) {
   };
 }
 
+export const doClearPlayingUri = () => (dispatch: Dispatch) => dispatch(doSetPlayingUri({ uri: null }));
+
 export function doSetPlayingUri({
   uri,
   source,
@@ -165,11 +167,12 @@ export function doPlayUri(
     const alreadyDownloading = fileInfo && !!downloadingByOutpoint[fileInfo.outpoint];
 
     if (alreadyDownloading || alreadyDownloaded) {
+      attemptPlay();
       return;
     }
 
     const daemonSettings = selectDaemonSettings(state);
-    const costInfo = makeSelectCostInfoForUri(uri)(state);
+    const costInfo = selectCostInfoForUri(state, uri);
     const cost = (costInfo && Number(costInfo.cost)) || 0;
     const saveFile = !uriIsStreamable ? true : daemonSettings.save_files || saveFileOverride || cost > 0;
     const instantPurchaseEnabled = makeSelectClientSetting(SETTINGS.INSTANT_PURCHASE_ENABLED)(state);
@@ -236,13 +239,28 @@ export function clearPosition(uri: string) {
   return (dispatch: Dispatch, getState: () => any) => {
     const state = getState();
     const claim = makeSelectClaimForUri(uri)(state);
+    const persistWatchTime = makeSelectClientSetting(SETTINGS.PERSIST_WATCH_TIME)(state);
     const { claim_id: claimId, txid, nout } = claim;
     const outpoint = `${txid}:${nout}`;
+
+    if (persistWatchTime) {
+      dispatch({
+        type: ACTIONS.SET_CONTENT_POSITION,
+        data: { claimId, outpoint, position: null },
+      });
+      return;
+    }
 
     dispatch({
       type: ACTIONS.CLEAR_CONTENT_POSITION,
       data: { claimId, outpoint },
     });
+  };
+}
+
+export function clearContentCache() {
+  return {
+    type: ACTIONS.CLEAR_CONTENT_CACHE,
   };
 }
 

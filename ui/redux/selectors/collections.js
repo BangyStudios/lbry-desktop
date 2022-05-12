@@ -17,6 +17,8 @@ export const selectMyEditedCollections = createSelector(selectState, (state) => 
 
 export const selectPendingCollections = createSelector(selectState, (state) => state.pending);
 
+export const selectLastUsedCollection = createSelector(selectState, (state) => state.lastUsedCollection);
+
 export const makeSelectEditedCollectionForId = (id: string) =>
   createSelector(selectMyEditedCollections, (eLists) => eLists[id]);
 
@@ -156,13 +158,13 @@ export const makeSelectClaimIdsForCollectionId = (id: string) =>
     return ids;
   });
 
-export const makeSelectIndexForUrlInCollection = (url: string, id: string) =>
+export const makeSelectIndexForUrlInCollection = (url: string, id: string, ignoreShuffle?: boolean) =>
   createSelector(
     (state) => state.content.shuffleList,
     makeSelectUrlsForCollectionId(id),
     makeSelectClaimForUri(url),
     (shuffleState, urls, claim) => {
-      const shuffleUrls = shuffleState && shuffleState.collectionId === id && shuffleState.newUrls;
+      const shuffleUrls = !ignoreShuffle && shuffleState && shuffleState.collectionId === id && shuffleState.newUrls;
       const listUrls = shuffleUrls || urls;
 
       const index = listUrls && listUrls.findIndex((u) => u === url);

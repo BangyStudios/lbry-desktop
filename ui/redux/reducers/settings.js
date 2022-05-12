@@ -31,8 +31,8 @@ const defaultState = {
     // UI
     [SETTINGS.LANGUAGE]: null,
     [SETTINGS.SEARCH_IN_LANGUAGE]: false,
-    [SETTINGS.THEME]: __('light'),
-    [SETTINGS.THEMES]: [__('light'), __('dark')],
+    [SETTINGS.THEME]: __('dark'),
+    [SETTINGS.THEMES]: [__('dark'), __('light')],
     [SETTINGS.HOMEPAGE]: null,
     [SETTINGS.HIDE_SPLASH_ANIMATION]: false,
     [SETTINGS.HIDE_BALANCE]: false,
@@ -45,6 +45,7 @@ const defaultState = {
     [SETTINGS.DESKTOP_WINDOW_ZOOM]: 1,
     [SETTINGS.CUSTOM_COMMENTS_SERVER_ENABLED]: false,
     [SETTINGS.CUSTOM_COMMENTS_SERVER_URL]: '',
+    [SETTINGS.CUSTOM_COMMENTS_SERVERS]: [],
     [SETTINGS.CUSTOM_SHARE_URL_ENABLED]: false,
     [SETTINGS.CUSTOM_SHARE_URL]: '',
 
@@ -66,6 +67,7 @@ const defaultState = {
     [SETTINGS.FLOATING_PLAYER]: true,
     [SETTINGS.AUTO_DOWNLOAD]: true,
     [SETTINGS.HIDE_REPOSTS]: false,
+    [SETTINGS.PERSIST_WATCH_TIME]: true,
 
     // OS
     [SETTINGS.AUTO_LAUNCH]: true,

@@ -49,9 +49,6 @@ type Analytics = {
       readyState: number,
     }
   ) => Promise<any>,
-  adsFetchedEvent: () => void,
-  adsReceivedEvent: (any) => void,
-  adsErrorEvent: (any) => void,
   emailProvidedEvent: () => void,
   emailVerifiedEvent: () => void,
   rewardEligibleEvent: () => void,
@@ -168,10 +165,7 @@ async function sendWatchmanData(body) {
     });
 
     return response;
-  } catch (err) {
-    console.log('ERROR FROM WATCHMAN BACKEND');
-    console.log(err);
-  }
+  } catch (err) {}
 }
 
 const analytics: Analytics = {
@@ -213,7 +207,7 @@ const analytics: Analytics = {
       startWatchmanIntervalIfNotRunning();
     }
   },
-  videoStartEvent: (claimId, duration, poweredBy, passedUserId, canonicalUrl, passedPlayer, videoBitrate) => {
+  videoStartEvent: (claimId, timeToStartVideo, poweredBy, passedUserId, canonicalUrl, passedPlayer, videoBitrate) => {
     // populate values for watchman when video starts
     userId = passedUserId;
     claimUrl = canonicalUrl;
@@ -224,7 +218,7 @@ const analytics: Analytics = {
     bitrateAsBitsPerSecond = videoBitrate;
 
     // sendPromMetric('time_to_start', duration);
-    sendMatomoEvent('Media', 'TimeToStart', claimId, duration);
+    sendMatomoEvent('Media', 'TimeToStart', claimId, timeToStartVideo);
   },
   error: (message) => {
     return new Promise((resolve) => {

@@ -126,14 +126,15 @@ export function doSetDaemonSetting(key, value, doNotDispatch = false) {
         // todo: add sdk reloadsettings() (or it happens automagically?)
       }
     });
-    Lbry.settings_get().then((settings) => {
-      analytics.toggleInternal(settings.share_usage_data);
-      dispatch({
-        type: ACTIONS.DAEMON_SETTINGS_RECEIVED,
-        data: {
-          settings,
-        },
-      });
+    dispatch(doFetchDaemonSettings());
+  };
+}
+
+export function doCleanBlobs() {
+  return (dispatch) => {
+    Lbry.blob_clean().then(() => {
+      dispatch(doFetchDaemonSettings());
+      return 'done';
     });
   };
 }
@@ -234,9 +235,8 @@ export function doPushSettingsToPrefs() {
   return (dispatch, getState) => {
     const state = getState();
     const {
-      settings: { clientSettings },
+      settings: { clientSettings, sharedPreferences },
     } = state;
-    const sharedPreferences = Object.assign({}, state.sharedPreferences);
     const selectedClientSettings = getSubsetFromKeysArray(clientSettings, CLIENT_SYNC_KEYS);
     const newSharedPreferences = { ...sharedPreferences, ...selectedClientSettings };
 

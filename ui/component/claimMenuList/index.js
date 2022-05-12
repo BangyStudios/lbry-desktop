@@ -3,10 +3,12 @@ import { selectClaimForUri, selectClaimIsMine } from 'redux/selectors/claims';
 import { doCollectionEdit, doFetchItemsInCollection } from 'redux/actions/collections';
 import { doPrepareEdit } from 'redux/actions/publish';
 import {
+  makeSelectCollectionForId,
   makeSelectCollectionForIdHasClaimUrl,
   makeSelectCollectionIsMine,
   makeSelectEditedCollectionForId,
   makeSelectUrlsForCollectionId,
+  selectLastUsedCollection,
 } from 'redux/selectors/collections';
 import { makeSelectFileInfoForUri } from 'redux/selectors/file_info';
 import * as COLLECTIONS_CONSTS from 'constants/collections';
@@ -26,7 +28,7 @@ import {
 } from 'redux/selectors/comments';
 import { doToast } from 'redux/actions/notifications';
 import { doChannelSubscribe, doChannelUnsubscribe } from 'redux/actions/subscriptions';
-import { makeSelectIsSubscribed } from 'redux/selectors/subscriptions';
+import { selectIsSubscribedForUri } from 'redux/selectors/subscriptions';
 import { selectListShuffle } from 'redux/selectors/content';
 import { doToggleLoopList, doToggleShuffleList } from 'redux/actions/content';
 import ClaimPreview from './view';
@@ -43,6 +45,8 @@ const select = (state, props) => {
   const shuffleList = selectListShuffle(state);
   const shuffle = shuffleList && shuffleList.collectionId === collectionId && shuffleList.newUrls;
   const playNextUri = shuffle && shuffle[0];
+  const lastUsedCollectionId = selectLastUsedCollection(state);
+  const lastUsedCollection = makeSelectCollectionForId(lastUsedCollectionId)(state);
 
   return {
     claim,
@@ -62,7 +66,7 @@ const select = (state, props) => {
     channelIsMuted: makeSelectChannelIsMuted(contentChannelUri)(state),
     channelIsBlocked: makeSelectChannelIsBlocked(contentChannelUri)(state),
     fileInfo: makeSelectFileInfoForUri(contentPermanentUri)(state),
-    isSubscribed: makeSelectIsSubscribed(contentChannelUri, true)(state),
+    isSubscribed: selectIsSubscribedForUri(state, contentChannelUri),
     channelIsAdminBlocked: makeSelectChannelIsAdminBlocked(props.uri)(state),
     isAdmin: selectHasAdminChannel(state),
     claimInCollection: makeSelectCollectionForIdHasClaimUrl(collectionId, contentPermanentUri)(state),
@@ -70,6 +74,14 @@ const select = (state, props) => {
     editedCollection: makeSelectEditedCollectionForId(collectionId)(state),
     resolvedList: makeSelectUrlsForCollectionId(collectionId)(state),
     playNextUri,
+    lastUsedCollection,
+    hasClaimInLastUsedCollection: makeSelectCollectionForIdHasClaimUrl(
+      lastUsedCollectionId,
+      contentPermanentUri
+    )(state),
+    lastUsedCollectionIsNotBuiltin:
+      lastUsedCollectionId !== COLLECTIONS_CONSTS.WATCH_LATER_ID &&
+      lastUsedCollectionId !== COLLECTIONS_CONSTS.FAVORITES_ID,
   };
 };
 
